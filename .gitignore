@@ -1,0 +1,14 @@
+.direnv
+.pre-commit-config.yaml
+#Nix
+result*
+#Rust
+target/
+#Python
+__pycache__/
+*.py[cot]
+
+
+# Added by cargo
+
+/target

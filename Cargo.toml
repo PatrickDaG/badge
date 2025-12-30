@@ -1,0 +1,28 @@
+[package]
+name = "badge"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies.ch58x-hal]
+git="https://github.com/ch32-rs/ch58x-hal.git"
+rev="20eac4fd7d65b2eaa8b4eae40f882724a5710646"
+
+[dependencies]
+panic-halt = "1.0.0"
+
+embassy-futures = "0.1.1"
+embassy-executor = { version = "0.9.1", features = [
+    "nightly",
+    "arch-riscv32",
+    "executor-thread",
+] }
+embassy-time = { version = "0.3.0" }
+qingke = { version = "0.1.7", features = ["critical-section-impl"] }
+qingke-rt = { version = "0.1.7", features = ["highcode"] }
+embedded-hal-1 = { version = "1.0.0", package = "embedded-hal" }
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+lto = true
+codegen-units = 1
