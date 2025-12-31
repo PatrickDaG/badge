@@ -2,14 +2,14 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(macro_metavar_expr)]
 #![allow(rust_2024_compatibility)]
 
 use ch58x_hal as hal;
 use ch58x_hal::gpio::Flex;
-use ch58x_hal::pac::{SYSTICK, systick};
 use embassy_executor::Spawner;
-use embassy_time::{Delay, Duration, Instant, Timer};
-use hal::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
+use embassy_time::{Duration, Timer};
+use hal::gpio::{AnyPin, Level, Output, OutputDrive, Pin, Pull};
 use hal::peripherals;
 use hal::prelude::*;
 use hal::rtc::Rtc;
@@ -48,17 +48,31 @@ async fn blink(pin: AnyPin) {
     }
 }
 
-struct LedIndex(u16);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct LedIndex(u8, u8);
 
-// const MATRIX: [[LedIndex; 44]; 11] = [
-//     // row![CA BA AB CB AC BC AD BD AE BE AF BF AG BG AH BH AI BI AJ BJ AK BK AL BL AM BM AN BN AO BO AP BP AQ BQ AR BR AS BS AT BT AU BU AV BV],
-//     // row![DA EA DB EB DC EC DD ED DE EE],
-//     row![CBACABABABABABABABABABABABABABABABABABABABAB],
-//     row![DEDEDECECDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD],
-// ];
+macro_rules! row {
+    [$($c:ident)*] => {
+        [$(LedIndex(stringify!($c).as_bytes()[0] - b'A', ${index()} / 2)),*]
+    };
+}
+
+const MATRIX: [[LedIndex; 44]; 11] = [
+    row![C B A C A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B A B],
+    row![D E D E D E C E C D C D C D C D C D C D C D C D C D C D C D C D C D C D C D C D C D C D],
+    row![F G F G F G F G F G E G E F E F E F E F E F E F E F E F E F E F E F E F E F E F E F E F],
+    row![H I H I H I H I H I H I H I G I G H G H G H G H G H G H G H G H G H G H G H G H G H G H],
+    row![J K J K J K J K J K J K J K J K J K I K I J I J I J I J I J I J I J I J I J I J I J I J],
+    row![L M L M L M L M L M L M L M L M L M L M L M K M K L K L K L K L K L K L K L K L K L K L],
+    row![N O N O N O N O N O N O N O N O N O N O N O N O N O M O M N M N M N M N M N M N M N M N],
+    row![P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q P Q O Q O P O P O P O P O P O P],
+    row![R S R S R S R S R S R S R S R S R S R S R S R S R S R S R S R S R S Q S Q R Q R Q R Q R],
+    row![T U T U T U T U T U T U T U T U T U T U T U T U T U T U T U T U T U T U T U S U S T S T],
+    row![V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W V W U W],
+];
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
-async fn main(spawner: Spawner) -> ! {
+async fn main(_spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
     config.clock.use_pll_60mhz();
     // config.enable_dcdc = true;
@@ -100,38 +114,60 @@ async fn main(spawner: Spawner) -> ! {
     for i in leds.iter_mut() {
         i.set_as_input(Pull::None);
     }
-    leds[0].set_high();
-    leds[0].set_as_output(OutputDrive::_20mA);
-    leds[1].set_low();
-    leds[2].set_low();
 
-    let mut states = [false; 23];
+    let mut last = (43, 10);
     loop {
-        let rb = unsafe { &*SYSTICK::PTR };
-        let ticks = rb.cnt().read().bits() >> 8;
+        for j in 0..11 {
+            for i in 0..44 {
+                let idx_last = MATRIX[last.1][last.0];
+                let idx_now = MATRIX[j][i];
 
-        for i in 1..17 {
-            let k = i;
-            states[k] = ((ticks >> (i - 1)) & 1) == 1;
-            if states[k] {
-                leds[k].set_as_output(OutputDrive::_5mA);
-            } else {
-                leds[k].set_as_input(Pull::None);
+                leds[idx_last.0 as usize].set_as_input(Pull::None);
+                leds[idx_last.1 as usize].set_as_input(Pull::None);
+
+                leds[idx_now.0 as usize].set_low();
+                leds[idx_now.1 as usize].set_high();
+                leds[idx_now.0 as usize].set_as_output(OutputDrive::_5mA);
+                leds[idx_now.1 as usize].set_as_output(OutputDrive::_5mA);
+
+                hal::delay_ms(5);
+
+                last = (i, j);
             }
         }
-
-        hal::delay_ms(1000);
-
-        // for i in 1..leds.len() {
-        //     let rb = unsafe { &*SYSTICK::PTR };
-        //     let ticks = rb.cnt().read().bits();
-        //     states[i] = !states[i];
-        //     if states[i] {
-        //         leds[i].set_as_output(OutputDrive::_5mA);
-        //     } else {
-        //         leds[i].set_as_input(Pull::None);
-        //     }
-        //     hal::delay_ms(10);
-        // }
     }
+
+    // leds[0].set_high();
+    // leds[0].set_as_output(OutputDrive::_20mA);
+    // leds[1].set_low();
+    // leds[2].set_low();
+    // let mut states = [false; 23];
+    // loop {
+    //     let rb = unsafe { &*SYSTICK::PTR };
+    //     let ticks = rb.cnt().read().bits() >> 8;
+    //
+    //     for i in 1..17 {
+    //         let k = i;
+    //         states[k] = ((ticks >> (i - 1)) & 1) == 1;
+    //         if states[k] {
+    //             leds[k].set_as_output(OutputDrive::_5mA);
+    //         } else {
+    //             leds[k].set_as_input(Pull::None);
+    //         }
+    //     }
+    //
+    //     hal::delay_ms(1000);
+    //
+    //     // for i in 1..leds.len() {
+    //     //     let rb = unsafe { &*SYSTICK::PTR };
+    //     //     let ticks = rb.cnt().read().bits();
+    //     //     states[i] = !states[i];
+    //     //     if states[i] {
+    //     //         leds[i].set_as_output(OutputDrive::_5mA);
+    //     //     } else {
+    //     //         leds[i].set_as_input(Pull::None);
+    //     //     }
+    //     //     hal::delay_ms(10);
+    //     // }
+    // }
 }
