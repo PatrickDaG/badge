@@ -3,14 +3,8 @@ name = "badge"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies.ch58x-hal]
-# git="https://github.com/outfoxxed/ch58x-hal.git"
-# rev="17970f4b47bc1c5f04c4670a366f32bd9bf7edc4"
-path = "./ch58x-hal"
-
 [dependencies]
 panic-halt = "1.0.0"
-
 embassy-futures = "0.1.1"
 embassy-executor = { version = "0.9.1", features = [
     "nightly",
@@ -18,6 +12,7 @@ embassy-executor = { version = "0.9.1", features = [
     "executor-thread",
 ] }
 embassy-time = { version = "0.5.0" }
+ch58x-hal = { path = "./ch58x-hal" }
 qingke = { version = "0.6.1", features = ["critical-section-impl", "unsafe-trust-wch-atomics"] }
 qingke-rt = { version = "0.6.1", features = ["highcode"] }
 embedded-hal-1 = { version = "1.0.0", package = "embedded-hal" }

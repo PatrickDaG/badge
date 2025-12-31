@@ -50,12 +50,12 @@ async fn blink(pin: AnyPin) {
 
 struct LedIndex(u16);
 
-const MATRIX: [[LedIndex; 44]; 11] = [
-    // row![CA BA AB CB AC BC AD BD AE BE AF BF AG BG AH BH AI BI AJ BJ AK BK AL BL AM BM AN BN AO BO AP BP AQ BQ AR BR AS BS AT BT AU BU AV BV],
-    // row![DA EA DB EB DC EC DD ED DE EE],
-    row![CBACABABABABABABABABABABABABABABABABABABABAB],
-    row![DEDEDECECDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD],
-];
+// const MATRIX: [[LedIndex; 44]; 11] = [
+//     // row![CA BA AB CB AC BC AD BD AE BE AF BF AG BG AH BH AI BI AJ BJ AK BK AL BL AM BM AN BN AO BO AP BP AQ BQ AR BR AS BS AT BT AU BU AV BV],
+//     // row![DA EA DB EB DC EC DD ED DE EE],
+//     row![CBACABABABABABABABABABABABABABABABABABABABAB],
+//     row![DEDEDECECDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD],
+// ];
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
