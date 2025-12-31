@@ -6,6 +6,7 @@
 
 use ch58x_hal as hal;
 use ch58x_hal::gpio::Flex;
+use ch58x_hal::pac::{SYSTICK, systick};
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Duration, Instant, Timer};
 use hal::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
@@ -13,22 +14,6 @@ use hal::peripherals;
 use hal::prelude::*;
 use hal::rtc::Rtc;
 use hal::uart::UartTx;
-use qingke::riscv::asm;
-
-static mut SERIAL: Option<UartTx<peripherals::UART1>> = None;
-
-macro_rules! println {
-    ($($arg:tt)*) => {
-        unsafe {
-            use core::fmt::Write;
-            use core::writeln;
-
-            if let Some(uart) = SERIAL.as_mut() {
-                writeln!(uart, $($arg)*).unwrap();
-            }
-        }
-    }
-}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -44,6 +29,14 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[embassy_executor::task]
+async fn schlink() {
+    Timer::after(Duration::from_millis(10000)).await;
+    unsafe {
+        hal::reset();
+    }
+}
+
+#[embassy_executor::task]
 async fn blink(pin: AnyPin) {
     let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
 
@@ -55,6 +48,15 @@ async fn blink(pin: AnyPin) {
     }
 }
 
+struct LedIndex(u16);
+
+const MATRIX: [[LedIndex; 44]; 11] = [
+    // row![CA BA AB CB AC BC AD BD AE BE AF BF AG BG AH BH AI BI AJ BJ AK BK AL BL AM BM AN BN AO BO AP BP AQ BQ AR BR AS BS AT BT AU BU AV BV],
+    // row![DA EA DB EB DC EC DD ED DE EE],
+    row![CBACABABABABABABABABABABABABABABABABABABABAB],
+    row![DEDEDECECDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD],
+];
+
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
@@ -65,40 +67,7 @@ async fn main(spawner: Spawner) -> ! {
     hal::embassy::init();
 
     let _rtc = Rtc::new(p.RTC);
-
-    let uart = UartTx::new(p.UART1, p.PA9, Default::default()).unwrap();
-    unsafe {
-        SERIAL.replace(uart);
-    }
-
-    let mut a = Output::new(p.PA15, Level::Low, OutputDrive::_5mA);
-    let mut b = Output::new(p.PB18, Level::High, OutputDrive::_5mA);
-    for i in 0..100000 {
-        a.set_low();
-        b.set_high();
-    }
-    for i in 0..100000 {
-        b.set_low();
-        a.set_high();
-    }
-    loop {}
-
-    // GPIO
-    // spawner.spawn(blink(p.PA8.degrade())).unwrap();
-
-    //     println!("\n\nHello World from ch58x-hal!");
-    //     println!(
-    //         r#"
-    //     ______          __
-    //    / ____/___ ___  / /_  ____ _____________  __
-    //   / __/ / __ `__ \/ __ \/ __ `/ ___/ ___/ / / /
-    //  / /___/ / / / / / /_/ / /_/ (__  |__  ) /_/ /
-    // /_____/_/ /_/ /_/_.___/\__,_/____/____/\__, /
-    //                                       /____/   on CH582F"#
-    //     );
-    //     println!("System Clocks: {}", hal::sysctl::clocks().hclk);
-    //     println!("ChipID: 0x{:02x}", hal::signature::get_chip_id());
-    //     println!("RTC datetime: {}", rtc.now());
+    // spawner.spawn(schlink()).unwrap();
 
     let mut battery_input = Flex::new(p.PA5);
     battery_input.set_as_input(Pull::None);
@@ -131,50 +100,38 @@ async fn main(spawner: Spawner) -> ! {
     for i in leds.iter_mut() {
         i.set_as_input(Pull::None);
     }
+    leds[0].set_high();
+    leds[0].set_as_output(OutputDrive::_20mA);
+    leds[1].set_low();
+    leds[2].set_low();
 
-    // GPIO
-    leds[0].set_low();
-    leds[0].set_as_output(OutputDrive::_5mA);
-
-    leds[1].set_as_input(Pull::None);
-    leds[1].set_high();
-    leds[2].set_as_input(Pull::None);
-    leds[2].set_high();
-    // let boot_btn = Input::new(p.PB22, Pull::Up);
-    // let rst_btn = Input::new(p.PB23, Pull::Up);
-    //
-    // let uart = UartTx::new(p.UART1, p.PA9, Default::default()).unwrap();
-    // unsafe {
-    //     SERIAL.replace(uart);
-    // }
-    //
-    // let rtc = Rtc::new(p.RTC);
-
-    // println!("\n\nHello World!");
-    // println!("System Clocks: {}", hal::sysctl::clocks().hclk);
-    // println!("ChipID: 0x{:02x}", hal::signature::get_chip_id());
-    // println!("RTC datetime: {}", rtc.now());
-
-    let mut i = 0;
+    let mut states = [false; 23];
     loop {
-        if i % 100000 == 0 {
-            leds[1].set_as_output(OutputDrive::_5mA);
-            leds[2].set_as_input(Pull::None);
-        } else {
-            leds[2].set_as_output(OutputDrive::_5mA);
-            leds[1].set_as_input(Pull::None);
+        let rb = unsafe { &*SYSTICK::PTR };
+        let ticks = rb.cnt().read().bits() >> 8;
+
+        for i in 1..17 {
+            let k = i;
+            states[k] = ((ticks >> (i - 1)) & 1) == 1;
+            if states[k] {
+                leds[k].set_as_output(OutputDrive::_5mA);
+            } else {
+                leds[k].set_as_input(Pull::None);
+            }
         }
-        // for k in 0..100000 {
-        //     unsafe {
-        //         asm::nop();
+
+        hal::delay_ms(1000);
+
+        // for i in 1..leds.len() {
+        //     let rb = unsafe { &*SYSTICK::PTR };
+        //     let ticks = rb.cnt().read().bits();
+        //     states[i] = !states[i];
+        //     if states[i] {
+        //         leds[i].set_as_output(OutputDrive::_5mA);
+        //     } else {
+        //         leds[i].set_as_input(Pull::None);
         //     }
+        //     hal::delay_ms(10);
         // }
-        i += 1;
-        if i == 100000 {
-            i = 0;
-        }
-        // println!("inst => {:?}, {}", Instant::now(), i);
-        // Delay.delay_ms(1000_u32); // blocking delay
-        // Timer::after(Duration::from_millis(1000)).await;
     }
 }

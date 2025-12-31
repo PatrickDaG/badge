@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies.ch58x-hal]
-git="https://github.com/ch32-rs/ch58x-hal.git"
-rev="20eac4fd7d65b2eaa8b4eae40f882724a5710646"
+# git="https://github.com/outfoxxed/ch58x-hal.git"
+# rev="17970f4b47bc1c5f04c4670a366f32bd9bf7edc4"
+path = "./ch58x-hal"
 
 [dependencies]
 panic-halt = "1.0.0"
@@ -16,9 +17,9 @@ embassy-executor = { version = "0.9.1", features = [
     "arch-riscv32",
     "executor-thread",
 ] }
-embassy-time = { version = "0.3.0" }
-qingke = { version = "0.1.7", features = ["critical-section-impl"] }
-qingke-rt = { version = "0.1.7", features = ["highcode"] }
+embassy-time = { version = "0.5.0" }
+qingke = { version = "0.6.1", features = ["critical-section-impl", "unsafe-trust-wch-atomics"] }
+qingke-rt = { version = "0.6.1", features = ["highcode"] }
 embedded-hal-1 = { version = "1.0.0", package = "embedded-hal" }
 
 [profile.release]
